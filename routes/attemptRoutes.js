@@ -1,10 +1,10 @@
 const express = require("express");
 const router = express.Router();
-const controller = require("../controllers/attemptController");
+const {startTest,checkIp,getEvents,getAttempt}= require("../controllers/attemptController");
 
-router.post("/start", controller.startAssessment);
-router.post("/checkIp", controller.checkIp);
-router.get("/events/:attemptId", controller.getEvents);
-router.get("/attempt/:attemptId", controller.getAttempt);
+router.post("/start", startTest);
+router.post("/checkIp", checkIp);
+router.get("/events/:attemptId", getEvents);
+router.get("/attempt/:attemptId", getAttempt);
 
 module.exports = router;

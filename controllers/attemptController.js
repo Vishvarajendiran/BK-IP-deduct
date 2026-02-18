@@ -3,31 +3,45 @@ const Event = require("../models/Event");
 const { v4: uuidv4 } = require("uuid");
 
 // Start Test
-exports.startAssessment = async (req, res) => {
+const startTest = async (req, res) => {
   try {
     const attemptId = uuidv4();
-    const IP =
-      req.headers["x-forwarded-for"] || req.socket.remoteAddress;
+
+    const currentIP =
+      req.headers["x-forwarded-for"]?.split(",")[0] ||
+      req.socket.remoteAddress;
 
     const newAttempt = await Attempt.create({
       attemptId,
-      baselineIP: IP
+      baselineIP: currentIP,
+      lastDetectedIP: currentIP,
+      ipChangeCount: 0,
+      status: "NORMAL"
     });
 
-    res.status(201).json({
-      message: "Assessment Started successfully",
-      attemptId: newAttempt.attemptId
+    await Event.create({
+      attemptId,
+      eventType: "IP_CAPTURED_INITIAL",
+      metadata: { ip: currentIP }
     });
+
+    res.json({ attemptId });
 
   } catch (err) {
+    console.error("Start test error:", err.message);
     res.status(500).json({ message: "Internal server error" });
   }
 };
 
+
 // Chech IP
-exports.checkIp = async (req, res) => {
+const checkIp = async (req, res) => {
   try {
     const { attemptId } = req.body;
+
+    if (!attemptId) {
+      return res.status(400).json({ message: "Attempt ID is required" });
+    }
 
     const currentIP =
       req.headers["x-forwarded-for"]?.split(",")[0] ||
@@ -39,50 +53,64 @@ exports.checkIp = async (req, res) => {
       return res.status(404).json({ message: "Attempt not found" });
     }
 
-    if (currentIP !== foundAttempt.baselineIP) {
-
-      await Event.create({
-        attemptId,
-        eventType: "IP_CHANGE_DETECTED",
-        metadata: {
-          previousIP: foundAttempt.baselineIP,
-          currentIP
-        }
-      });
-
-      foundAttempt.ipChangeCount += 1;
-      foundAttempt.baselineIP = currentIP;
-
-      if (foundAttempt.ipChangeCount >= 3) {
-        foundAttempt.status = "SUSPICIOUS";
-      }
-
-      await foundAttempt.save();
-
+    // If IP hasn't changed since last poll
+    if (currentIP === foundAttempt.lastDetectedIP) {
       return res.json({
-        changed: true,
-        message: "IP changed detected",
-        ipChangeCount: foundAttempt.ipChangeCount
+        changed: false,
+        ipChangeCount: foundAttempt.ipChangeCount,
+        status: foundAttempt.status
       });
     }
 
+    // Real transition detected
+    await Event.create({
+      attemptId,
+      eventType: "IP_CHANGE_DETECTED",
+      metadata: {
+        baselineIP: foundAttempt.baselineIP,
+        previousIP: foundAttempt.lastDetectedIP,
+        currentIP
+      }
+    });
+
+    // Only increment if different from original baseline
+    if (currentIP !== foundAttempt.baselineIP) {
+      foundAttempt.ipChangeCount += 1;
+    }
+
+    foundAttempt.lastDetectedIP = currentIP;
+
+    if (foundAttempt.ipChangeCount >= 3) {
+      foundAttempt.status = "SUSPICIOUS";
+    }
+
+    await foundAttempt.save();
+
     res.json({
-      changed: false,
-      message: "IP is same",
-      ipChangeCount: foundAttempt.ipChangeCount
+      changed: true,
+      ipChangeCount: foundAttempt.ipChangeCount,
+      status: foundAttempt.status
     });
 
   } catch (err) {
+    console.error("Check IP error:", err.message);
     res.status(500).json({ message: "Internal server error" });
   }
 };
 
+
 // GET  Events
-exports.getEvents = async (req, res) => {
+const getEvents = async (req, res) => {
   try {
     const { attemptId } = req.params;
 
-    const events = await Event.find({ attemptId });
+    if (!attemptId) {
+      return res.status(400).json({ message: "Attempt ID is required" });
+    }
+
+    const events = await Event.find({ attemptId })
+      .sort({ createdAt: 1 }) // oldest first
+      .lean();
 
     res.json({
       totalEvents: events.length,
@@ -90,16 +118,22 @@ exports.getEvents = async (req, res) => {
     });
 
   } catch (err) {
+    console.error("Get events error:", err.message);
     res.status(500).json({ message: "Internal server error" });
   }
 };
 
+
 // GET Attempt
-exports.getAttempt = async (req, res) => {
+const getAttempt = async (req, res) => {
   try {
     const { attemptId } = req.params;
 
-    const attempt = await Attempt.findOne({ attemptId });
+    if (!attemptId) {
+      return res.status(400).json({ message: "Attempt ID is required" });
+    }
+
+    const attempt = await Attempt.findOne({ attemptId }).lean();
 
     if (!attempt) {
       return res.status(404).json({ message: "Attempt not found" });
@@ -108,12 +142,16 @@ exports.getAttempt = async (req, res) => {
     res.json({
       attemptId: attempt.attemptId,
       baselineIP: attempt.baselineIP,
+      lastDetectedIP: attempt.lastDetectedIP,
       ipChangeCount: attempt.ipChangeCount,
       startedAt: attempt.startedAt,
       status: attempt.status
     });
 
   } catch (err) {
+    console.error("Get attempt error:", err.message);
     res.status(500).json({ message: "Internal server error" });
   }
 };
+
+module.exports = {startTest,checkIp,getEvents,getAttempt}

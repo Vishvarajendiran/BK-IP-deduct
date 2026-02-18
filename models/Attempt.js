@@ -6,23 +6,34 @@ const AttemptSchema = new mongoose.Schema({
     required: true,
     unique: true
   },
+
+  // IP when assessment started (never changes)
   baselineIP: {
     type: String,
     required: true
   },
+
+  // Last IP we already processed
+  lastDetectedIP: {
+    type: String,
+    required: true
+  },
+
   ipChangeCount: {
     type: Number,
     default: 0
   },
+
+  status: {
+    type: String,
+    enum: ["NORMAL", "SUSPICIOUS"],
+    default: "NORMAL"
+  },
+
   startedAt: {
     type: Date,
     default: Date.now
-  },
-  status: {
-  type: String,
-  default: "NORMAL"
-}
-
+  }
 });
 
 module.exports = mongoose.model("Attempt", AttemptSchema);
