@@ -8,8 +8,10 @@ const startTest = async (req, res) => {
     const attemptId = uuidv4();
 
     const currentIP =
-      req.headers["x-forwarded-for"]?.split(",")[0] ||
-      req.socket.remoteAddress;
+  (req.headers["x-forwarded-for"]?.split(",")[0] ||
+  req.socket.remoteAddress ||
+  "").trim();
+
 
     const newAttempt = await Attempt.create({
       attemptId,
@@ -33,7 +35,6 @@ const startTest = async (req, res) => {
   }
 };
 
-
 // Chech IP
 const checkIp = async (req, res) => {
   try {
@@ -44,8 +45,10 @@ const checkIp = async (req, res) => {
     }
 
     const currentIP =
-      req.headers["x-forwarded-for"]?.split(",")[0] ||
-      req.socket.remoteAddress;
+      (req.headers["x-forwarded-for"]?.split(",")[0] ||
+        req.socket.remoteAddress || "")
+        .trim();
+
 
     const foundAttempt = await Attempt.findOne({ attemptId });
 
@@ -53,7 +56,12 @@ const checkIp = async (req, res) => {
       return res.status(404).json({ message: "Attempt not found" });
     }
 
-    // If IP hasn't changed since last poll
+    await Event.create({
+      attemptId,
+      eventType: "IP_CHECK_PERFORMED",
+      metadata: { currentIP }
+    });
+
     if (currentIP === foundAttempt.lastDetectedIP) {
       return res.json({
         changed: false,
@@ -62,7 +70,6 @@ const checkIp = async (req, res) => {
       });
     }
 
-    // Real transition detected
     await Event.create({
       attemptId,
       eventType: "IP_CHANGE_DETECTED",
@@ -73,7 +80,17 @@ const checkIp = async (req, res) => {
       }
     });
 
-    // Only increment if different from original baseline
+    const classification =
+      currentIP === foundAttempt.baselineIP
+        ? "BENIGN"
+        : "SUSPICIOUS";
+
+    await Event.create({
+      attemptId,
+      eventType: "IP_CHANGE_CLASSIFIED",
+      metadata: { classification ,currentIP}
+    });
+
     if (currentIP !== foundAttempt.baselineIP) {
       foundAttempt.ipChangeCount += 1;
     }
@@ -98,7 +115,6 @@ const checkIp = async (req, res) => {
   }
 };
 
-
 // GET  Events
 const getEvents = async (req, res) => {
   try {
@@ -109,7 +125,7 @@ const getEvents = async (req, res) => {
     }
 
     const events = await Event.find({ attemptId })
-      .sort({ createdAt: 1 }) // oldest first
+      .sort({ createdAt: 1 })
       .lean();
 
     res.json({
@@ -122,7 +138,6 @@ const getEvents = async (req, res) => {
     res.status(500).json({ message: "Internal server error" });
   }
 };
-
 
 // GET Attempt
 const getAttempt = async (req, res) => {
@@ -154,4 +169,4 @@ const getAttempt = async (req, res) => {
   }
 };
 
-module.exports = {startTest,checkIp,getEvents,getAttempt}
+module.exports = { startTest, checkIp, getEvents, getAttempt }

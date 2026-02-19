@@ -1,21 +1,22 @@
 const mongoose = require("mongoose");
 
-const EventsSchema = new mongoose.Schema({
-  attemptId: {
-    type: String,
-    required: true
+const EventsSchema = new mongoose.Schema(
+  {
+    attemptId: {
+      type: String,
+      required: true,
+      index: true
+    },
+    eventType: {
+      type: String,
+      required: true
+    },
+    metadata: {
+      type: Object,
+      default: {}
+    }
   },
-  eventType: {
-    type: String,
-    required: true
-  },
-  metadata: {
-    type: Object
-  },
-  timestamp: {
-    type: Date,
-    default: Date.now
-  }
-});
+  { timestamps: true }
+);
 
 module.exports = mongoose.model("Event", EventsSchema);
