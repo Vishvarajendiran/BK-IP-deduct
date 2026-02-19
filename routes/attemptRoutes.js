@@ -4,7 +4,7 @@ const {startTest,checkIp,getEvents,getAttempt, logEvent}= require("../controller
 
 router.post("/start", startTest);
 router.post("/checkIp", checkIp);
-router.get("/logEvent",logEvent)
+router.post("/logEvent",logEvent)
 router.get("/events/:attemptId", getEvents);
 router.get("/attempt/:attemptId", getAttempt);
 
