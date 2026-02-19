@@ -15,10 +15,7 @@ app.use(express.json());
 app.use(helmet());
 app.use(cors());
 
-
-// mongoose.connect(process.env.MONGO_URI)
-//   .then(() => console.log("MongoDB connected successfully!"))
-//   .catch(err => console.log(err));
+app.set("trust proxy", true);
 
 connectDB()
 app.get("/",(req,res)=>{
