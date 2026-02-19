@@ -169,4 +169,27 @@ const getAttempt = async (req, res) => {
   }
 };
 
-module.exports = { startTest, checkIp, getEvents, getAttempt }
+// LOG EVENT (Unified Logging)
+const logEvent = async (req, res) => {
+  try {
+    const { attemptId, eventType, metadata } = req.body;
+
+    if (!attemptId || !eventType) {
+      return res.status(400).json({ message: "Attempt ID and eventType required" });
+    }
+
+    await Event.create({
+      attemptId,
+      eventType,
+      metadata: metadata || {}
+    });
+
+    res.json({ success: true });
+
+  } catch (err) {
+    console.error("Log event error:", err.message);
+    res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+module.exports = { startTest, checkIp, getEvents, getAttempt,logEvent }
